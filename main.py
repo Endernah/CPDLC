@@ -1,30 +1,29 @@
 from flask import Flask, request, jsonify, render_template, redirect
-import random, json, base64
+import random, json, bcrypt, json
 
 # AUTHENTICATION
 
 atc_codes = {}
 admin_codes = {}
 cpdlc_codes = {}
+admins = open('admin.json', 'r').read()
+admins = json.loads(admins)
 
 def auth_admin(user, passwd):
-    passwd = base64.b64encode(passwd.encode('utf-8')).decode('utf-8')
-    if f"'user': '{user}', 'passw': '{passwd}'" in str(admin_codes):
+    if not bcrypt.checkpw(passwd.encode('utf-8'), admins[user].encode('utf-8')):
+        return None
+    if f"'user': '{user}'" in str(admin_codes):
         for code, data in admin_codes.items():
             if data['user'] == user:
                 print(f"New auth on {request.remote_addr} with code {code} (Codes {admin_codes})")
                 return code
     else:
-        with open('admin.json') as f:
-            admin_data = json.load(f)
-            if user in admin_data and admin_data[user] == passwd:
-                code = generate_code()
-                while code in admin_codes:
-                    code = generate_code()
-                admin_codes[code] = {'user': user, 'passw': passwd}
-                print(f"New auth on {request.remote_addr} with code {code} (Codes {admin_codes})")
-                return code
-        f.close()
+        code = generate_code()
+        while code in admin_codes:
+            code = generate_code()
+        admin_codes[code] = {'user': user}
+        print(f"New auth on {request.remote_addr} with code {code} (Codes {admin_codes})")
+        return code
 
 def generate_code():
     return ''.join(random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ') for i in range(12))
@@ -89,14 +88,20 @@ def admin():
 def admin_login():
     user = request.args.get('user')
     passwd = request.args.get('passwd')
-    try:
-        code = auth_admin(user, passwd)
-        if code is not None:
-            return redirect('/admin?code=' + code)
-        else:
-            return redirect("/admin")
-    except:
-        return 'Invalid request'
+    code = auth_admin(user, passwd)
+    if code is not None:
+        return redirect('/admin?code=' + code)
+    else:
+        return redirect("/admin")
+
+@app.route('/hash/')
+def hash():
+    return render_template('hash.html')    
+
+@app.route('/hash_action', methods=['GET'])
+def hash_action():
+    passwd = request.args.get('passwd')
+    return bcrypt.hashpw(passwd.encode("utf-8"), bcrypt.gensalt())
 
 if __name__ == '__main__':
     app.run(debug=True)
