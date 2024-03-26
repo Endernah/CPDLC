@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect
+from flask import Flask, request, jsonify, render_template, redirect, logging
 import random, json, bcrypt, json
 
 # AUTHENTICATION
@@ -79,12 +79,17 @@ def admin():
     else:
         data = get_code(request.args.get('code'), 'admin')
         if data is not None:
-            print(get_code(request.args.get('code'), 'admin'))
             return render_template('admin.html', user=data['user'])
         else:
             return redirect('/admin')
-    
-@app.route('/admin_login', methods=['GET'])
+
+@app.route('/hash/')
+def hash():
+    return render_template('hash.html')    
+
+# API
+
+@app.route('/api/login/admin', methods=['GET'])
 def admin_login():
     user = request.args.get('user')
     passwd = request.args.get('passwd')
@@ -94,14 +99,12 @@ def admin_login():
     else:
         return redirect("/admin")
 
-@app.route('/hash/')
-def hash():
-    return render_template('hash.html')    
-
-@app.route('/hash_action', methods=['GET'])
+@app.route('/api/hash', methods=['GET'])
 def hash_action():
     passwd = request.args.get('passwd')
     return bcrypt.hashpw(passwd.encode("utf-8"), bcrypt.gensalt())
 
+# RUN
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
