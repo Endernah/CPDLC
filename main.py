@@ -1,11 +1,11 @@
-from flask import Flask, request, jsonify, render_template, redirect, logging
+from flask import Flask, request, jsonify, render_template, redirect
 import random, json, bcrypt, json
 
 # AUTHENTICATION
 
 atc_codes = {}
 admin_codes = {}
-cpdlc_codes = {}
+pilot_codes = {}
 admins = open('admin.json', 'r').read()
 admins = json.loads(admins)
 
@@ -35,11 +35,11 @@ def new_code(name, discord, type):
             code = generate_code()
         atc_codes[code] = {'name': name, 'discord': discord}
         return code
-    elif type == 'cpdlc':
+    elif type == 'pilot':
         code = generate_code()
-        while code in cpdlc_codes:
+        while code in pilot_codes:
             code = generate_code()
-        cpdlc_codes[code] = {'name': name, 'discord': discord}
+        pilot_codes[code] = {'name': name, 'discord': discord}
         return code
 
 def get_code(code, type):
@@ -49,9 +49,9 @@ def get_code(code, type):
     if type == 'admin':
         if code in admin_codes:
             return admin_codes[code]
-    elif type == 'cpdlc':
-        if code in cpdlc_codes:
-            return cpdlc_codes[code]
+    elif type == 'pilot':
+        if code in pilot_codes:
+            return pilot_codes[code]
 
 # APP
         
@@ -68,9 +68,9 @@ def atc():
     else:
         return render_template('atc.html', name=atc_codes.get(request.args.get('code')))
 
-@app.route('/cpdlc')
-def cpdlc():
-    return render_template('cpdlc_login.html')
+@app.route('/pilot')
+def pilot():
+    return render_template('pilot_login.html')
 
 @app.route('/admin')
 def admin():
@@ -83,26 +83,33 @@ def admin():
         else:
             return redirect('/admin')
 
-@app.route('/hash/')
+@app.route('/hasher')
 def hash():
     return render_template('hash.html')    
 
 # API
 
-@app.route('/api/login/admin', methods=['GET'])
+@app.route('/api/login/admin', methods=['GET','POST'])
 def admin_login():
-    user = request.args.get('user')
-    passwd = request.args.get('passwd')
-    code = auth_admin(user, passwd)
+    user = request.form.get('user')
+    passwd = request.form.get('passwd')
+    print(passwd)
+    try:
+        code = auth_admin(user, passwd)
+    except:
+        return "Erro accured."
     if code is not None:
         return redirect('/admin?code=' + code)
     else:
         return redirect("/admin")
 
-@app.route('/api/hash', methods=['GET'])
+@app.route('/api/hash', methods=['GET','POST'])
 def hash_action():
-    passwd = request.args.get('passwd')
-    return bcrypt.hashpw(passwd.encode("utf-8"), bcrypt.gensalt())
+    try:
+        passwd = request.form.get('passwd')
+        return bcrypt.hashpw(passwd.encode("utf-8"), bcrypt.gensalt())
+    except:
+        return "Erro accured."
 
 # RUN
 
