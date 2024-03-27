@@ -1,13 +1,12 @@
-from flask import Flask, request, jsonify, render_template, redirect
-import random, json, bcrypt, json
+from flask import Flask, request, jsonify, render_template, redirect, jwt
+import random, json, bcrypt
 
 # AUTHENTICATION
 
 atc_codes = {}
 admin_codes = {}
 pilot_codes = {}
-admins = open('admin.json', 'r').read()
-admins = json.loads(admins)
+admins = json.loads(open('admin.json', 'r').read())
 
 def auth_admin(user, passwd):
     if not bcrypt.checkpw(passwd.encode('utf-8'), admins[user].encode('utf-8')):
