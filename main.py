@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, jwt
+from flask import Flask, request, jsonify, render_template, redirect
 import random, json, bcrypt
 
 # AUTHENTICATION
