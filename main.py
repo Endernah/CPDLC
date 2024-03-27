@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect
+from flask import Flask, request, jsonify, render_template, redirect, make_response
 import random, json, bcrypt
 
 # AUTHENTICATION
@@ -14,14 +14,14 @@ def auth_admin(user, passwd):
     if f"'user': '{user}'" in str(admin_codes):
         for code, data in admin_codes.items():
             if data['user'] == user:
-                print(f"New auth on {request.remote_addr} with code {code} (Codes {admin_codes})")
+                print(f"New auth on {request.remote_addr} with code ...{str(code)[-2:]}")
                 return code
     else:
         code = generate_code()
         while code in admin_codes:
             code = generate_code()
         admin_codes[code] = {'user': user}
-        print(f"New auth on {request.remote_addr} with code {code} (Codes {admin_codes})")
+        print(f"New auth on {request.remote_addr} with code ...{str(code)[-2:]}")
         return code
 
 def generate_code():
@@ -41,17 +41,6 @@ def new_code(name, discord, type):
         pilot_codes[code] = {'name': name, 'discord': discord}
         return code
 
-def get_code(code, type):
-    if type == 'atc':
-        if code in atc_codes:
-            return atc_codes[code]
-    if type == 'admin':
-        if code in admin_codes:
-            return admin_codes[code]
-    elif type == 'pilot':
-        if code in pilot_codes:
-            return pilot_codes[code]
-
 # APP
         
 app = Flask(__name__)
@@ -62,10 +51,10 @@ def index():
 
 @app.route('/atc')
 def atc():
-    if not request.args.get('code'):
+    if not request.cookies.get('code_atc'):
         return render_template('atc_login.html')
     else:
-        return render_template('atc.html', name=atc_codes.get(request.args.get('code')))
+        return render_template('atc.html', name=atc_codes.get(request.cookies.get('code_atc')))
 
 @app.route('/pilot')
 def pilot():
@@ -73,14 +62,16 @@ def pilot():
 
 @app.route('/admin')
 def admin():
-    if request.args.get('code') is None:
+    if request.cookies.get('code') is None:
         return render_template('admin_login.html')
     else:
-        data = get_code(request.args.get('code'), 'admin')
+        data = admin_codes.get(request.cookies.get('code'))
         if data is not None:
             return render_template('admin.html', user=data['user'])
         else:
-            return redirect('/admin')
+            resp = make_response(redirect('/admin'))
+            resp.delete_cookie('code')
+            return resp
 
 @app.route('/hasher')
 def hash():
@@ -92,15 +83,20 @@ def hash():
 def admin_login():
     user = request.form.get('user')
     passwd = request.form.get('passwd')
-    print(passwd)
     try:
         code = auth_admin(user, passwd)
     except:
-        return "Erro accured."
+        resp = make_response(redirect('/admin'))
+        resp.delete_cookie('code')
+        return resp
     if code is not None:
-        return redirect('/admin?code=' + code)
+        resp = make_response(redirect('/admin'))
+        resp.set_cookie('code', code)
+        return resp
     else:
-        return redirect("/admin")
+        resp = make_response(redirect('/admin'))
+        resp.delete_cookie('code')
+        return resp
 
 @app.route('/api/hash', methods=['GET','POST'])
 def hash_action():
@@ -108,7 +104,7 @@ def hash_action():
         passwd = request.form.get('passwd')
         return bcrypt.hashpw(passwd.encode("utf-8"), bcrypt.gensalt())
     except:
-        return "Erro accured."
+        return "Error accured.", 401
 
 # RUN
 
