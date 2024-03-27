@@ -27,18 +27,18 @@ def auth_admin(user, passwd):
 def generate_code():
     return ''.join(random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ') for i in range(12))
 
-def new_code(name, discord, type):
+def new_code(callsign, discord, type):
     if type == 'atc':
         code = generate_code()
         while code in atc_codes:
             code = generate_code()
-        atc_codes[code] = {'name': name, 'discord': discord}
+        atc_codes[code] = {'callsign': callsign, 'discord': discord}
         return code
     elif type == 'pilot':
         code = generate_code()
         while code in pilot_codes:
             code = generate_code()
-        pilot_codes[code] = {'name': name, 'discord': discord}
+        pilot_codes[code] = {'callsign': callsign, 'discord': discord}
         return code
 
 # APP
@@ -54,11 +54,24 @@ def atc():
     if not request.cookies.get('code_atc'):
         return render_template('atc_login.html')
     else:
-        return render_template('atc.html', name=atc_codes.get(request.cookies.get('code_atc')))
+        try:
+            name = pilot_codes.get(request.cookies.get('code_pilot'))['name']
+            discord = pilot_codes.get(request.cookies.get('code_pilot'))['discord']
+            return render_template('atc.html', name=name, discord=discord)
+        except:
+            return render_template('atc_login.html')
 
 @app.route('/pilot')
 def pilot():
-    return render_template('pilot_login.html')
+    if not request.cookies.get('code_pilot'):
+        return render_template('pilot_login.html')
+    else:
+        try:
+            name = pilot_codes.get(request.cookies.get('code_pilot'))['name']
+            discord = pilot_codes.get(request.cookies.get('code_pilot'))['discord']
+            return render_template('pilot.html', name=name, discord=discord)
+        except:
+            return render_template('pilot_login.html')
 
 @app.route('/admin')
 def admin():
@@ -78,6 +91,24 @@ def hash():
     return render_template('hash.html')    
 
 # API
+
+@app.route('/api/login/atc', methods=['GET','POST'])
+def atc_login():
+    callsign = request.form.get('callsign')
+    discord = request.form.get('discord')
+    code = new_code(callsign, discord, 'atc')
+    resp = make_response(redirect('/atc'))
+    resp.set_cookie('code_atc', code)
+    return resp
+
+@app.route('/api/login/pilot', methods=['GET','POST'])
+def pilot_login():
+    callsign = request.form.get('callsign')
+    discord = request.form.get('discord')
+    code = new_code(callsign, discord, 'pilot')
+    resp = make_response(redirect('/pilot'))
+    resp.set_cookie('code_pilot', code)
+    return resp
 
 @app.route('/api/login/admin', methods=['GET','POST'])
 def admin_login():
