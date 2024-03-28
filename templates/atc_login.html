@@ -5,5 +5,12 @@
 </head>
 <body>
     <h1>LOGIN</h1>
+    <form action="/api/login/atc" method="POST">
+        <label for="user">Callsign:</label>
+        <input type="text" id="callsign" name="callsign" required><br><br>
+        <label for="text">Discord:</label>
+        <input type="text" id="discord" name="discord" required><br><br>
+        <input type="submit" value="Login">
+    </form>
 </body>
 </html>

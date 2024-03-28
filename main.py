@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, redirect, make_response
+from flask_socketio import SocketIO
 import random, json, bcrypt
 
 # AUTHENTICATION
@@ -7,6 +8,9 @@ atc_codes = {}
 admin_codes = {}
 pilot_codes = {}
 admins = json.loads(open('admin.json', 'r').read())
+
+def active_users():
+    return len(atc_codes) + len(pilot_codes)
 
 def auth_admin(user, passwd):
     if not bcrypt.checkpw(passwd.encode('utf-8'), admins[user].encode('utf-8')):
@@ -44,6 +48,7 @@ def new_code(callsign, discord, type):
 # APP
         
 app = Flask(__name__)
+socketio = SocketIO(app)
 
 @app.route('/')
 def index():
@@ -55,11 +60,17 @@ def atc():
         return render_template('atc_login.html')
     else:
         try:
-            name = pilot_codes.get(request.cookies.get('code_pilot'))['name']
-            discord = pilot_codes.get(request.cookies.get('code_pilot'))['discord']
-            return render_template('atc.html', name=name, discord=discord)
+            callsign = atc_codes.get(request.cookies.get('code_atc'))['callsign']
+            discord = atc_codes.get(request.cookies.get('code_atc'))['discord']
+            return render_template('atc.html', callsign=callsign, discord=discord, code=request.cookies.get('code_atc'))
         except:
-            return render_template('atc_login.html')
+            try:
+                atc_codes.pop(request.cookies.get('code_atc'))
+            except:
+                pass
+            resp = make_response(redirect('/atc'))
+            resp.delete_cookie('code_atc')
+            return resp
 
 @app.route('/pilot')
 def pilot():
@@ -67,11 +78,17 @@ def pilot():
         return render_template('pilot_login.html')
     else:
         try:
-            name = pilot_codes.get(request.cookies.get('code_pilot'))['name']
+            callsign = pilot_codes.get(request.cookies.get('code_pilot'))['callsign']
             discord = pilot_codes.get(request.cookies.get('code_pilot'))['discord']
-            return render_template('pilot.html', name=name, discord=discord)
+            return render_template('pilot.html', callsign=callsign, discord=discord, code=request.cookies.get('code_pilot'))
         except:
-            return render_template('pilot_login.html')
+            try:
+                pilot_codes.pop(request.cookies.get('code_pilot'))
+            except:
+                pass
+            resp = make_response(redirect('/pilot'))
+            resp.delete_cookie('code_pilot')
+            return resp
 
 @app.route('/admin')
 def admin():
@@ -80,7 +97,7 @@ def admin():
     else:
         data = admin_codes.get(request.cookies.get('code'))
         if data is not None:
-            return render_template('admin.html', user=data['user'])
+            return render_template('admin.html', user=data['user'], active_users=active_users())
         else:
             resp = make_response(redirect('/admin'))
             resp.delete_cookie('code')
@@ -90,12 +107,42 @@ def admin():
 def hash():
     return render_template('hash.html')    
 
+# SOCKET.IO API
+
+@socketio.on('disconnect')
+def disconnect():
+    if request.cookies.get('atc_code') in atc_codes:
+        atc_codes.pop(request.cookies.get('atc_code'))
+        print(f"...{str(request.cookies.get('atc_code'))[-2:]} disconnected.")
+        return
+    elif request.cookies.get('pilot_code') in pilot_codes:
+        pilot_codes.pop(request.cookies.get('pilot_code'))
+        print(f"...{str(request.cookies.get('pilot_code'))[-2:]} disconnected.")
+        return
+    print("Unknown user disconnected.")
+
+@socketio.on('pilot/connect')
+def pilot_connect(code):
+    print(f"...{str(code)[-2:]} Pilot connected.")
+
+@socketio.on('pilot/disconnect')
+def pilot_disconnect(code):
+    print(f"...{str(code)[-2:]} Pilot disconnected.")
+
+#@socketio.on('atc/send')
+#def atc_send(callsign, data):
+#    socketio.emit('pilot/receive', data, broadcast=True)
+
+
+
 # API
 
 @app.route('/api/login/atc', methods=['GET','POST'])
 def atc_login():
     callsign = request.form.get('callsign')
     discord = request.form.get('discord')
+    if callsign in [data['callsign'] for data in atc_codes.values()]:
+        return "Callsign already taken", 400
     code = new_code(callsign, discord, 'atc')
     resp = make_response(redirect('/atc'))
     resp.set_cookie('code_atc', code)
@@ -105,6 +152,8 @@ def atc_login():
 def pilot_login():
     callsign = request.form.get('callsign')
     discord = request.form.get('discord')
+    if callsign in [data['callsign'] for data in pilot_codes.values()]:
+        return "Callsign already taken", 400
     code = new_code(callsign, discord, 'pilot')
     resp = make_response(redirect('/pilot'))
     resp.set_cookie('code_pilot', code)
@@ -140,4 +189,4 @@ def hash_action():
 # RUN
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    socketio.run(app)
