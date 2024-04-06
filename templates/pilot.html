@@ -10,9 +10,10 @@
         socket.on('connect', function() {
             socket.emit('pilot/connect', '{{ code }}');
         });
-        socket.on('disconnect', function() {
-            socket.emit('pilot/disconnect', '{{ code }}');
-        });
+
+        setInterval(function() {
+            socket.emit('check', '{{ code }}');
+        }, 1000);
     </script>
     <h1>Welcome, {{ callsign }}</h1>
 </body>

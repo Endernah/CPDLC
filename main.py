@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, render_template, redirect, make_response
 from flask_socketio import SocketIO
-import random, json, bcrypt
+import random, json, bcrypt, threading, time
 
 # AUTHENTICATION
 
@@ -36,13 +36,13 @@ def new_code(callsign, discord, type):
         code = generate_code()
         while code in atc_codes:
             code = generate_code()
-        atc_codes[code] = {'callsign': callsign, 'discord': discord}
+        atc_codes[code] = {'callsign': callsign, 'discord': discord, 'last_check': time.time()}
         return code
     elif type == 'pilot':
         code = generate_code()
         while code in pilot_codes:
             code = generate_code()
-        pilot_codes[code] = {'callsign': callsign, 'discord': discord}
+        pilot_codes[code] = {'callsign': callsign, 'discord': discord, 'last_check': time.time()}
         return code
 
 # APP
@@ -64,10 +64,8 @@ def atc():
             discord = atc_codes.get(request.cookies.get('code_atc'))['discord']
             return render_template('atc.html', callsign=callsign, discord=discord, code=request.cookies.get('code_atc'))
         except:
-            try:
-                atc_codes.pop(request.cookies.get('code_atc'))
-            except:
-                pass
+            try: atc_codes.pop(request.cookies.get('code_atc'))
+            except: pass
             resp = make_response(redirect('/atc'))
             resp.delete_cookie('code_atc')
             return resp
@@ -82,10 +80,8 @@ def pilot():
             discord = pilot_codes.get(request.cookies.get('code_pilot'))['discord']
             return render_template('pilot.html', callsign=callsign, discord=discord, code=request.cookies.get('code_pilot'))
         except:
-            try:
-                pilot_codes.pop(request.cookies.get('code_pilot'))
-            except:
-                pass
+            try: pilot_codes.pop(request.cookies.get('code_pilot'))
+            except: pass
             resp = make_response(redirect('/pilot'))
             resp.delete_cookie('code_pilot')
             return resp
@@ -109,31 +105,33 @@ def hash():
 
 # SOCKET.IO API
 
-@socketio.on('disconnect')
-def disconnect():
-    if request.cookies.get('atc_code') in atc_codes:
-        atc_codes.pop(request.cookies.get('atc_code'))
-        print(f"...{str(request.cookies.get('atc_code'))[-2:]} disconnected.")
-        return
-    elif request.cookies.get('pilot_code') in pilot_codes:
-        pilot_codes.pop(request.cookies.get('pilot_code'))
-        print(f"...{str(request.cookies.get('pilot_code'))[-2:]} disconnected.")
-        return
-    print("Unknown user disconnected.")
-
 @socketio.on('pilot/connect')
 def pilot_connect(code):
     print(f"...{str(code)[-2:]} Pilot connected.")
 
-@socketio.on('pilot/disconnect')
-def pilot_disconnect(code):
-    print(f"...{str(code)[-2:]} Pilot disconnected.")
+@socketio.on('atc/connect')
+def atc_connect(code):
+    print(f"...{str(code)[-2:]} Atc connected.")
 
-#@socketio.on('atc/send')
-#def atc_send(callsign, data):
-#    socketio.emit('pilot/receive', data, broadcast=True)
+@socketio.on('check')
+def handle_check(code):
+    if code in atc_codes:
+        atc_codes[code]['last_check'] = time.time()
+    elif code in pilot_codes:
+        pilot_codes[code]['last_check'] = time.time()
 
-
+def check_inactivity():
+    while True:
+        current_time = time.time()
+        inactive_codes = [code for code, data in atc_codes.items() if current_time - data['last_check'] > 5]
+        for code in inactive_codes:
+            atc_codes.pop(code)
+            print(f"...{str(code)[-2:]} Atc disconnected due to inactivity.")
+        inactive_codes = [code for code, data in pilot_codes.items() if current_time - data['last_check'] > 5]
+        for code in inactive_codes:
+            pilot_codes.pop(code)
+            print(f"...{str(code)[-2:]} Pilot disconnected due to inactivity.")
+        time.sleep(5)
 
 # API
 
@@ -189,4 +187,6 @@ def hash_action():
 # RUN
 
 if __name__ == '__main__':
+    inactivity_thread = threading.Thread(target=check_inactivity)
+    inactivity_thread.start()
     socketio.run(app)
