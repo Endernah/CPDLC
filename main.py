@@ -93,7 +93,7 @@ def admin():
     else:
         data = admin_codes.get(request.cookies.get('code'))
         if data is not None:
-            return render_template('admin.html', user=data['user'], active_users=active_users())
+            return render_template('admin.html', user=data['user'], active_users=active_users(), atc=[data['callsign'] for data in atc_codes.values()], pilot=[data['callsign'] for data in pilot_codes.values()])
         else:
             resp = make_response(redirect('/admin'))
             resp.delete_cookie('code')
